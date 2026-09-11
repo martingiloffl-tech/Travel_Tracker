@@ -21,9 +21,10 @@ supabase = create_client(
 
 def initialize_database():
     """
-    Tables are already created in Supabase.
-    This function is kept so existing app.py calls
-    continue to work.
+    Supabase tables are already created.
+
+    This function is retained temporarily so the
+    existing app.py structure does not break.
     """
     return
 
@@ -178,11 +179,14 @@ def add_booking_service(
         "provider_service_id": provider_service_id,
 
         "service_date": str(service_date),
-        "end_date": str(end_date) if end_date else None,
+        "end_date": (
+            str(end_date)
+            if end_date is not None
+            else None
+        ),
 
         "quantity": quantity,
         "price": price,
-
         "status": status,
         "notes": notes
     }
@@ -199,21 +203,10 @@ def add_booking_service(
 
 def get_booking_services(booking_id):
 
-    response = (
+    booking_services_response = (
         supabase
         .table("booking_services")
-        .select("""
-            *,
-            service_providers (
-                provider_name,
-                provider_type
-            ),
-            provider_services (
-                service_name,
-                service_description,
-                price_unit
-            )
-        """)
+        .select("*")
         .eq("booking_id", booking_id)
         .order("service_date")
         .execute()
@@ -221,19 +214,60 @@ def get_booking_services(booking_id):
 
     rows = []
 
-    for row in response.data:
+    for row in booking_services_response.data:
 
-        provider = row.pop("service_providers", None) or {}
-        service = row.pop("provider_services", None) or {}
-
-        row["provider_name"] = provider.get("provider_name")
-        row["provider_type"] = provider.get("provider_type")
-
-        row["service_name"] = service.get("service_name")
-        row["service_description"] = service.get(
-            "service_description"
+        provider = get_provider(
+            row["provider_id"]
         )
-        row["price_unit"] = service.get("price_unit")
+
+        service = None
+
+        if row.get("provider_service_id"):
+            services_response = (
+                supabase
+                .table("provider_services")
+                .select("*")
+                .eq(
+                    "id",
+                    row["provider_service_id"]
+                )
+                .execute()
+            )
+
+            if services_response.data:
+                service = (
+                    services_response.data[0]
+                )
+
+        row["provider_name"] = (
+            provider.get("provider_name")
+            if provider
+            else None
+        )
+
+        row["provider_type"] = (
+            provider.get("provider_type")
+            if provider
+            else None
+        )
+
+        row["service_name"] = (
+            service.get("service_name")
+            if service
+            else None
+        )
+
+        row["service_description"] = (
+            service.get("service_description")
+            if service
+            else None
+        )
+
+        row["price_unit"] = (
+            service.get("price_unit")
+            if service
+            else None
+        )
 
         rows.append(row)
 
@@ -245,17 +279,7 @@ def get_provider_bookings(provider_id):
     response = (
         supabase
         .table("booking_services")
-        .select("""
-            *,
-            bookings (
-                customer_name,
-                total_travelers,
-                destination
-            ),
-            provider_services (
-                service_name
-            )
-        """)
+        .select("*")
         .eq("provider_id", provider_id)
         .order("service_date")
         .execute()
@@ -265,14 +289,53 @@ def get_provider_bookings(provider_id):
 
     for row in response.data:
 
-        booking = row.pop("bookings", None) or {}
-        service = row.pop("provider_services", None) or {}
+        booking = get_booking(
+            row["booking_id"]
+        )
 
-        row["customer_name"] = booking.get("customer_name")
-        row["total_travelers"] = booking.get("total_travelers")
-        row["destination"] = booking.get("destination")
+        service = None
 
-        row["service_name"] = service.get("service_name")
+        if row.get("provider_service_id"):
+
+            service_response = (
+                supabase
+                .table("provider_services")
+                .select("*")
+                .eq(
+                    "id",
+                    row["provider_service_id"]
+                )
+                .execute()
+            )
+
+            if service_response.data:
+                service = (
+                    service_response.data[0]
+                )
+
+        row["customer_name"] = (
+            booking.get("customer_name")
+            if booking
+            else None
+        )
+
+        row["total_travelers"] = (
+            booking.get("total_travelers")
+            if booking
+            else 0
+        )
+
+        row["destination"] = (
+            booking.get("destination")
+            if booking
+            else None
+        )
+
+        row["service_name"] = (
+            service.get("service_name")
+            if service
+            else None
+        )
 
         rows.append(row)
 
@@ -290,24 +353,10 @@ def get_operations_by_date(selected_date):
     response = (
         supabase
         .table("booking_services")
-        .select("""
-            *,
-            bookings (
-                customer_name,
-                total_travelers,
-                destination
-            ),
-            service_providers (
-                provider_name,
-                provider_type
-            ),
-            provider_services (
-                service_name
-            )
-        """)
-        .lte("service_date", selected_date)
-        .or_(
-            f"end_date.is.null,end_date.gte.{selected_date}"
+        .select("*")
+        .lte(
+            "service_date",
+            selected_date
         )
         .execute()
     )
@@ -316,18 +365,79 @@ def get_operations_by_date(selected_date):
 
     for row in response.data:
 
-        booking = row.pop("bookings", None) or {}
-        provider = row.pop("service_providers", None) or {}
-        service = row.pop("provider_services", None) or {}
+        end_date = row.get("end_date")
 
-        row["customer_name"] = booking.get("customer_name")
-        row["total_travelers"] = booking.get("total_travelers")
-        row["destination"] = booking.get("destination")
+        # Skip completed services
+        # before the selected date
+        if (
+            end_date is not None
+            and str(end_date) < selected_date
+        ):
+            continue
 
-        row["provider_name"] = provider.get("provider_name")
-        row["provider_type"] = provider.get("provider_type")
+        booking = get_booking(
+            row["booking_id"]
+        )
 
-        row["service_name"] = service.get("service_name")
+        provider = get_provider(
+            row["provider_id"]
+        )
+
+        service = None
+
+        if row.get("provider_service_id"):
+
+            service_response = (
+                supabase
+                .table("provider_services")
+                .select("*")
+                .eq(
+                    "id",
+                    row["provider_service_id"]
+                )
+                .execute()
+            )
+
+            if service_response.data:
+                service = (
+                    service_response.data[0]
+                )
+
+        row["customer_name"] = (
+            booking.get("customer_name")
+            if booking
+            else None
+        )
+
+        row["total_travelers"] = (
+            booking.get("total_travelers")
+            if booking
+            else 0
+        )
+
+        row["destination"] = (
+            booking.get("destination")
+            if booking
+            else None
+        )
+
+        row["provider_name"] = (
+            provider.get("provider_name")
+            if provider
+            else None
+        )
+
+        row["provider_type"] = (
+            provider.get("provider_type")
+            if provider
+            else None
+        )
+
+        row["service_name"] = (
+            service.get("service_name")
+            if service
+            else None
+        )
 
         rows.append(row)
 
@@ -350,7 +460,10 @@ def get_dashboard_stats():
     bookings_response = (
         supabase
         .table("bookings")
-        .select("id", count="exact")
+        .select(
+            "id",
+            count="exact"
+        )
         .execute()
     )
 
@@ -361,7 +474,10 @@ def get_dashboard_stats():
             "id",
             count="exact"
         )
-        .eq("status", "Confirmed")
+        .eq(
+            "status",
+            "Confirmed"
+        )
         .execute()
     )
 
@@ -376,7 +492,13 @@ def get_dashboard_stats():
     )
 
     return {
-        "total_bookings": bookings_response.count or 0,
-        "confirmed": confirmed_response.count or 0,
-        "providers": providers_response.count or 0
+        "total_bookings": (
+            bookings_response.count or 0
+        ),
+        "confirmed": (
+            confirmed_response.count or 0
+        ),
+        "providers": (
+            providers_response.count or 0
+        )
     }
