@@ -1,144 +1,31 @@
-import sqlite3
-from pathlib import Path
+import streamlit as st
+from supabase import create_client
 
 
-DB_FILE = Path("travel_tracker.db")
+# ==================================================
+# SUPABASE CONNECTION
+# ==================================================
+
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
 
 
-def get_connection():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
+# ==================================================
+# DATABASE INITIALIZATION
+# ==================================================
 
 def initialize_database():
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # ==================================================
-    # BOOKINGS
-    # ==================================================
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            customer_name TEXT NOT NULL,
-            mobile_number TEXT,
-            email TEXT,
-
-            total_travelers INTEGER NOT NULL,
-            adults INTEGER NOT NULL,
-            children INTEGER NOT NULL,
-
-            coming_from TEXT,
-            pickup_location TEXT,
-            destination TEXT NOT NULL,
-
-            arrival_date TEXT NOT NULL,
-            departure_date TEXT NOT NULL,
-
-            status TEXT NOT NULL,
-            notes TEXT,
-
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # ==================================================
-    # SERVICE PROVIDERS
-    # ==================================================
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS providers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            provider_name TEXT NOT NULL,
-            provider_type TEXT NOT NULL,
-
-            contact_person TEXT,
-            phone TEXT,
-            location TEXT,
-            notes TEXT
-        )
-    """)
-
-    # ==================================================
-    # PROVIDER SERVICES
-    # ==================================================
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS provider_services (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            provider_id INTEGER NOT NULL,
-
-            service_name TEXT NOT NULL,
-            service_description TEXT,
-
-            price REAL,
-            price_unit TEXT,
-
-            capacity INTEGER,
-
-            FOREIGN KEY (provider_id)
-                REFERENCES providers(id)
-        )
-    """)
-
-    # ==================================================
-    # FOOD MENU ITEMS
-    # ==================================================
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS service_menu_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            provider_service_id INTEGER NOT NULL,
-
-            item_name TEXT NOT NULL,
-            category TEXT,
-
-            FOREIGN KEY (provider_service_id)
-                REFERENCES provider_services(id)
-        )
-    """)
-
-    # ==================================================
-    # BOOKING SERVICE MAPPING
-    # ==================================================
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS booking_services (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            booking_id INTEGER NOT NULL,
-            provider_id INTEGER NOT NULL,
-            provider_service_id INTEGER,
-
-            service_date TEXT NOT NULL,
-            end_date TEXT,
-
-            quantity INTEGER,
-            price REAL,
-
-            status TEXT DEFAULT 'Planned',
-            notes TEXT,
-
-            FOREIGN KEY (booking_id)
-                REFERENCES bookings(id),
-
-            FOREIGN KEY (provider_id)
-                REFERENCES providers(id),
-
-            FOREIGN KEY (provider_service_id)
-                REFERENCES provider_services(id)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+    """
+    Tables are already created in Supabase.
+    This function is kept so existing app.py calls
+    continue to work.
+    """
+    return
 
 
 # ==================================================
@@ -147,88 +34,63 @@ def initialize_database():
 
 def create_booking(data):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    payload = {
+        "customer_name": data["customer_name"],
+        "mobile_number": data.get("mobile_number", ""),
+        "email": data.get("email", ""),
 
-    cursor.execute("""
-        INSERT INTO bookings (
-            customer_name,
-            mobile_number,
-            email,
-            total_travelers,
-            adults,
-            children,
-            coming_from,
-            pickup_location,
-            destination,
-            arrival_date,
-            departure_date,
-            status,
-            notes
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data["customer_name"],
-        data.get("mobile_number", ""),
-        data.get("email", ""),
+        "total_travelers": data["total_travelers"],
+        "adults": data["adults"],
+        "children": data["children"],
 
-        data["total_travelers"],
-        data["adults"],
-        data["children"],
+        "coming_from": data.get("coming_from", ""),
+        "pickup_location": data.get("pickup_location", ""),
+        "destination": data["destination"],
 
-        data.get("coming_from", ""),
-        data.get("pickup_location", ""),
-        data["destination"],
+        "arrival_date": str(data["arrival_date"]),
+        "departure_date": str(data["departure_date"]),
 
-        data["arrival_date"],
-        data["departure_date"],
+        "status": data["status"],
+        "notes": data.get("notes", "")
+    }
 
-        data["status"],
-        data.get("notes", "")
-    ))
+    response = (
+        supabase
+        .table("bookings")
+        .insert(payload)
+        .execute()
+    )
 
-    booking_id = cursor.lastrowid
-
-    conn.commit()
-    conn.close()
-
-    return booking_id
+    return response.data[0]["id"]
 
 
 def get_all_bookings():
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("bookings")
+        .select("*")
+        .order("arrival_date")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT *
-        FROM bookings
-        ORDER BY arrival_date ASC
-    """)
-
-    rows = cursor.fetchall()
-
-    conn.close()
-
-    return rows
+    return response.data
 
 
 def get_booking(booking_id):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("bookings")
+        .select("*")
+        .eq("id", booking_id)
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT *
-        FROM bookings
-        WHERE id = ?
-    """, (booking_id,))
+    if response.data:
+        return response.data[0]
 
-    row = cursor.fetchone()
-
-    conn.close()
-
-    return row
+    return None
 
 
 # ==================================================
@@ -237,76 +99,61 @@ def get_booking(booking_id):
 
 def get_all_providers():
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("service_providers")
+        .select("*")
+        .order("provider_type")
+        .order("provider_name")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT *
-        FROM providers
-        ORDER BY provider_type, provider_name
-    """)
-
-    rows = cursor.fetchall()
-
-    conn.close()
-
-    return rows
+    return response.data
 
 
 def get_provider(provider_id):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("service_providers")
+        .select("*")
+        .eq("id", provider_id)
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT *
-        FROM providers
-        WHERE id = ?
-    """, (provider_id,))
+    if response.data:
+        return response.data[0]
 
-    row = cursor.fetchone()
-
-    conn.close()
-
-    return row
+    return None
 
 
 def get_provider_services(provider_id):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("provider_services")
+        .select("*")
+        .eq("provider_id", provider_id)
+        .order("service_name")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT *
-        FROM provider_services
-        WHERE provider_id = ?
-        ORDER BY service_name
-    """, (provider_id,))
-
-    rows = cursor.fetchall()
-
-    conn.close()
-
-    return rows
+    return response.data
 
 
 def get_service_menu_items(service_id):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("food_menu_items")
+        .select("*")
+        .eq("provider_service_id", service_id)
+        .order("category")
+        .order("item_name")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT *
-        FROM service_menu_items
-        WHERE provider_service_id = ?
-        ORDER BY category, item_name
-    """, (service_id,))
-
-    rows = cursor.fetchall()
-
-    conn.close()
-
-    return rows
+    return response.data
 
 
 # ==================================================
@@ -325,99 +172,109 @@ def add_booking_service(
     notes=""
 ):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    payload = {
+        "booking_id": booking_id,
+        "provider_id": provider_id,
+        "provider_service_id": provider_service_id,
 
-    cursor.execute("""
-        INSERT INTO booking_services (
-            booking_id,
-            provider_id,
-            provider_service_id,
-            service_date,
-            end_date,
-            quantity,
-            price,
-            status,
-            notes
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        booking_id,
-        provider_id,
-        provider_service_id,
-        service_date,
-        end_date,
-        quantity,
-        price,
-        status,
-        notes
-    ))
+        "service_date": str(service_date),
+        "end_date": str(end_date) if end_date else None,
 
-    conn.commit()
-    conn.close()
+        "quantity": quantity,
+        "price": price,
+
+        "status": status,
+        "notes": notes
+    }
+
+    response = (
+        supabase
+        .table("booking_services")
+        .insert(payload)
+        .execute()
+    )
+
+    return response.data
 
 
 def get_booking_services(booking_id):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("booking_services")
+        .select("""
+            *,
+            service_providers (
+                provider_name,
+                provider_type
+            ),
+            provider_services (
+                service_name,
+                service_description,
+                price_unit
+            )
+        """)
+        .eq("booking_id", booking_id)
+        .order("service_date")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT
-            bs.*,
-            p.provider_name,
-            p.provider_type,
-            ps.service_name,
-            ps.service_description,
-            ps.price_unit
-        FROM booking_services bs
+    rows = []
 
-        JOIN providers p
-            ON bs.provider_id = p.id
+    for row in response.data:
 
-        LEFT JOIN provider_services ps
-            ON bs.provider_service_id = ps.id
+        provider = row.pop("service_providers", None) or {}
+        service = row.pop("provider_services", None) or {}
 
-        WHERE bs.booking_id = ?
+        row["provider_name"] = provider.get("provider_name")
+        row["provider_type"] = provider.get("provider_type")
 
-        ORDER BY bs.service_date ASC
-    """, (booking_id,))
+        row["service_name"] = service.get("service_name")
+        row["service_description"] = service.get(
+            "service_description"
+        )
+        row["price_unit"] = service.get("price_unit")
 
-    rows = cursor.fetchall()
-
-    conn.close()
+        rows.append(row)
 
     return rows
 
 
 def get_provider_bookings(provider_id):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("booking_services")
+        .select("""
+            *,
+            bookings (
+                customer_name,
+                total_travelers,
+                destination
+            ),
+            provider_services (
+                service_name
+            )
+        """)
+        .eq("provider_id", provider_id)
+        .order("service_date")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT
-            bs.*,
-            b.customer_name,
-            b.total_travelers,
-            b.destination,
-            ps.service_name
-        FROM booking_services bs
+    rows = []
 
-        JOIN bookings b
-            ON bs.booking_id = b.id
+    for row in response.data:
 
-        LEFT JOIN provider_services ps
-            ON bs.provider_service_id = ps.id
+        booking = row.pop("bookings", None) or {}
+        service = row.pop("provider_services", None) or {}
 
-        WHERE bs.provider_id = ?
+        row["customer_name"] = booking.get("customer_name")
+        row["total_travelers"] = booking.get("total_travelers")
+        row["destination"] = booking.get("destination")
 
-        ORDER BY bs.service_date ASC
-    """, (provider_id,))
+        row["service_name"] = service.get("service_name")
 
-    rows = cursor.fetchall()
-
-    conn.close()
+        rows.append(row)
 
     return rows
 
@@ -428,83 +285,98 @@ def get_provider_bookings(provider_id):
 
 def get_operations_by_date(selected_date):
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    selected_date = str(selected_date)
 
-    cursor.execute("""
-        SELECT
-            bs.*,
-            b.customer_name,
-            b.total_travelers,
-            b.destination,
-
-            p.provider_name,
-            p.provider_type,
-
-            ps.service_name
-
-        FROM booking_services bs
-
-        JOIN bookings b
-            ON bs.booking_id = b.id
-
-        JOIN providers p
-            ON bs.provider_id = p.id
-
-        LEFT JOIN provider_services ps
-            ON bs.provider_service_id = ps.id
-
-        WHERE
-            bs.service_date <= ?
-            AND (
-                bs.end_date IS NULL
-                OR bs.end_date >= ?
+    response = (
+        supabase
+        .table("booking_services")
+        .select("""
+            *,
+            bookings (
+                customer_name,
+                total_travelers,
+                destination
+            ),
+            service_providers (
+                provider_name,
+                provider_type
+            ),
+            provider_services (
+                service_name
             )
+        """)
+        .lte("service_date", selected_date)
+        .or_(
+            f"end_date.is.null,end_date.gte.{selected_date}"
+        )
+        .execute()
+    )
 
-        ORDER BY p.provider_type, b.customer_name
-    """, (selected_date, selected_date))
+    rows = []
 
-    rows = cursor.fetchall()
+    for row in response.data:
 
-    conn.close()
+        booking = row.pop("bookings", None) or {}
+        provider = row.pop("service_providers", None) or {}
+        service = row.pop("provider_services", None) or {}
+
+        row["customer_name"] = booking.get("customer_name")
+        row["total_travelers"] = booking.get("total_travelers")
+        row["destination"] = booking.get("destination")
+
+        row["provider_name"] = provider.get("provider_name")
+        row["provider_type"] = provider.get("provider_type")
+
+        row["service_name"] = service.get("service_name")
+
+        rows.append(row)
+
+    rows.sort(
+        key=lambda x: (
+            x.get("provider_type") or "",
+            x.get("customer_name") or ""
+        )
+    )
 
     return rows
 
 
+# ==================================================
+# DASHBOARD FUNCTIONS
+# ==================================================
+
 def get_dashboard_stats():
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT COUNT(*) AS count FROM bookings"
+    bookings_response = (
+        supabase
+        .table("bookings")
+        .select("id", count="exact")
+        .execute()
     )
 
-    total_bookings = cursor.fetchone()["count"]
-
-    cursor.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM bookings
-        WHERE status = 'Confirmed'
-        """
+    confirmed_response = (
+        supabase
+        .table("bookings")
+        .select(
+            "id",
+            count="exact"
+        )
+        .eq("status", "Confirmed")
+        .execute()
     )
 
-    confirmed = cursor.fetchone()["count"]
-
-    cursor.execute(
-        """
-        SELECT COUNT(*) AS count
-        FROM providers
-        """
+    providers_response = (
+        supabase
+        .table("service_providers")
+        .select(
+            "id",
+            count="exact"
+        )
+        .execute()
     )
-
-    providers = cursor.fetchone()["count"]
-
-    conn.close()
 
     return {
-        "total_bookings": total_bookings,
-        "confirmed": confirmed,
-        "providers": providers
+        "total_bookings": bookings_response.count or 0,
+        "confirmed": confirmed_response.count or 0,
+        "providers": providers_response.count or 0
     }
