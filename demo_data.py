@@ -1,5 +1,5 @@
 from database import (
-    get_connection,
+    supabase,
     create_booking,
     add_booking_service
 )
@@ -7,215 +7,214 @@ from database import (
 
 def seed_demo_data():
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    # ==================================================
+    # CHECK WHETHER DEMO DATA ALREADY EXISTS
+    # ==================================================
 
-    # Don't create demo data again if it already exists
-    cursor.execute("SELECT COUNT(*) AS count FROM providers")
+    existing_providers = (
+        supabase
+        .table("service_providers")
+        .select("id")
+        .limit(1)
+        .execute()
+    )
 
-    if cursor.fetchone()["count"] > 0:
-        conn.close()
+    if existing_providers.data:
         return
+
 
     # ==================================================
     # PROVIDERS
     # ==================================================
 
     providers = [
-        (
-            "ABC Mountain Hotel",
-            "Hotel",
-            "Arun Kumar",
-            "9000000001",
-            "Hill View",
-            "Premium hotel accommodation"
-        ),
-        (
-            "Green Valley Resort",
-            "Hotel",
-            "Priya Nair",
-            "9000000002",
-            "Green Valley",
-            "Resort accommodation"
-        ),
-        (
-            "ABC Food Services",
-            "Food",
-            "Ravi",
-            "9000000003",
-            "Town Center",
-            "Breakfast, lunch and dinner packages"
-        ),
-        (
-            "Blue Lake Boat Services",
-            "Boat",
-            "Suresh",
-            "9000000004",
-            "Lake Area",
-            "Boat and cruise services"
-        ),
-        (
-            "Mountain Adventures",
-            "Trekking",
-            "Anil",
-            "9000000005",
-            "Mountain Base",
-            "Guided hiking and trekking"
-        )
+        {
+            "provider_name": "ABC Mountain Hotel",
+            "provider_type": "Hotel",
+            "contact_person": "Arun Kumar",
+            "phone": "9000000001",
+            "location": "Hill View",
+            "notes": "Premium hotel accommodation"
+        },
+        {
+            "provider_name": "Green Valley Resort",
+            "provider_type": "Hotel",
+            "contact_person": "Priya Nair",
+            "phone": "9000000002",
+            "location": "Green Valley",
+            "notes": "Resort accommodation"
+        },
+        {
+            "provider_name": "ABC Food Services",
+            "provider_type": "Food",
+            "contact_person": "Ravi",
+            "phone": "9000000003",
+            "location": "Town Center",
+            "notes": "Breakfast, lunch and dinner packages"
+        },
+        {
+            "provider_name": "Blue Lake Boat Services",
+            "provider_type": "Boat",
+            "contact_person": "Suresh",
+            "phone": "9000000004",
+            "location": "Lake Area",
+            "notes": "Boat and cruise services"
+        },
+        {
+            "provider_name": "Mountain Adventures",
+            "provider_type": "Trekking",
+            "contact_person": "Anil",
+            "phone": "9000000005",
+            "location": "Mountain Base",
+            "notes": "Guided hiking and trekking"
+        }
     ]
 
     provider_ids = {}
 
     for provider in providers:
 
-        cursor.execute("""
-            INSERT INTO providers (
-                provider_name,
-                provider_type,
-                contact_person,
-                phone,
-                location,
-                notes
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, provider)
+        response = (
+            supabase
+            .table("service_providers")
+            .insert(provider)
+            .execute()
+        )
 
-        provider_ids[provider[0]] = cursor.lastrowid
+        provider_ids[
+            provider["provider_name"]
+        ] = response.data[0]["id"]
 
-    conn.commit()
 
     # ==================================================
     # PROVIDER SERVICES
     # ==================================================
 
     services = [
-        (
-            provider_ids["ABC Mountain Hotel"],
-            "Deluxe Room",
-            "Comfortable room for two adults",
-            4500,
-            "Per Night",
-            2
-        ),
-        (
-            provider_ids["ABC Mountain Hotel"],
-            "Family Room",
-            "Large room suitable for families",
-            7500,
-            "Per Night",
-            4
-        ),
-        (
-            provider_ids["ABC Mountain Hotel"],
-            "Private Cottage",
-            "Independent cottage for large families",
-            12000,
-            "Per Night",
-            6
-        ),
-        (
-            provider_ids["Green Valley Resort"],
-            "Garden Room",
-            "Room with garden view",
-            5000,
-            "Per Night",
-            2
-        ),
-        (
-            provider_ids["Green Valley Resort"],
-            "Family Suite",
-            "Large suite for families",
-            9000,
-            "Per Night",
-            5
-        ),
-        (
-            provider_ids["ABC Food Services"],
-            "Breakfast Package",
-            "Morning breakfast package",
-            350,
-            "Per Person",
-            None
-        ),
-        (
-            provider_ids["ABC Food Services"],
-            "Lunch Package",
-            "Complete lunch package",
-            500,
-            "Per Person",
-            None
-        ),
-        (
-            provider_ids["ABC Food Services"],
-            "Dinner Package",
-            "Complete dinner package",
-            600,
-            "Per Person",
-            None
-        ),
-        (
-            provider_ids["ABC Food Services"],
-            "Full Board",
-            "Breakfast, lunch and dinner",
-            1350,
-            "Per Person / Day",
-            None
-        ),
-        (
-            provider_ids["Blue Lake Boat Services"],
-            "Standard Boat Ride",
-            "One hour lake ride",
-            3000,
-            "Per Boat",
-            8
-        ),
-        (
-            provider_ids["Blue Lake Boat Services"],
-            "Sunset Cruise",
-            "Two hour sunset cruise",
-            6500,
-            "Per Boat",
-            12
-        ),
-        (
-            provider_ids["Mountain Adventures"],
-            "Sunrise Trek",
-            "Easy three hour guided trek",
-            1200,
-            "Per Person",
-            15
-        ),
-        (
-            provider_ids["Mountain Adventures"],
-            "Valley Trek",
-            "Moderate six hour guided trek",
-            2000,
-            "Per Person",
-            12
-        )
+        {
+            "provider_id": provider_ids["ABC Mountain Hotel"],
+            "service_name": "Deluxe Room",
+            "service_description": "Comfortable room for two adults",
+            "price": 4500,
+            "price_unit": "Per Night",
+            "capacity": 2
+        },
+        {
+            "provider_id": provider_ids["ABC Mountain Hotel"],
+            "service_name": "Family Room",
+            "service_description": "Large room suitable for families",
+            "price": 7500,
+            "price_unit": "Per Night",
+            "capacity": 4
+        },
+        {
+            "provider_id": provider_ids["ABC Mountain Hotel"],
+            "service_name": "Private Cottage",
+            "service_description": "Independent cottage for large families",
+            "price": 12000,
+            "price_unit": "Per Night",
+            "capacity": 6
+        },
+        {
+            "provider_id": provider_ids["Green Valley Resort"],
+            "service_name": "Garden Room",
+            "service_description": "Room with garden view",
+            "price": 5000,
+            "price_unit": "Per Night",
+            "capacity": 2
+        },
+        {
+            "provider_id": provider_ids["Green Valley Resort"],
+            "service_name": "Family Suite",
+            "service_description": "Large suite for families",
+            "price": 9000,
+            "price_unit": "Per Night",
+            "capacity": 5
+        },
+        {
+            "provider_id": provider_ids["ABC Food Services"],
+            "service_name": "Breakfast Package",
+            "service_description": "Morning breakfast package",
+            "price": 350,
+            "price_unit": "Per Person",
+            "capacity": None
+        },
+        {
+            "provider_id": provider_ids["ABC Food Services"],
+            "service_name": "Lunch Package",
+            "service_description": "Complete lunch package",
+            "price": 500,
+            "price_unit": "Per Person",
+            "capacity": None
+        },
+        {
+            "provider_id": provider_ids["ABC Food Services"],
+            "service_name": "Dinner Package",
+            "service_description": "Complete dinner package",
+            "price": 600,
+            "price_unit": "Per Person",
+            "capacity": None
+        },
+        {
+            "provider_id": provider_ids["ABC Food Services"],
+            "service_name": "Full Board",
+            "service_description": "Breakfast, lunch and dinner",
+            "price": 1350,
+            "price_unit": "Per Person / Day",
+            "capacity": None
+        },
+        {
+            "provider_id": provider_ids["Blue Lake Boat Services"],
+            "service_name": "Standard Boat Ride",
+            "service_description": "One hour lake ride",
+            "price": 3000,
+            "price_unit": "Per Boat",
+            "capacity": 8
+        },
+        {
+            "provider_id": provider_ids["Blue Lake Boat Services"],
+            "service_name": "Sunset Cruise",
+            "service_description": "Two hour sunset cruise",
+            "price": 6500,
+            "price_unit": "Per Boat",
+            "capacity": 12
+        },
+        {
+            "provider_id": provider_ids["Mountain Adventures"],
+            "service_name": "Sunrise Trek",
+            "service_description": "Easy three hour guided trek",
+            "price": 1200,
+            "price_unit": "Per Person",
+            "capacity": 15
+        },
+        {
+            "provider_id": provider_ids["Mountain Adventures"],
+            "service_name": "Valley Trek",
+            "service_description": "Moderate six hour guided trek",
+            "price": 2000,
+            "price_unit": "Per Person",
+            "capacity": 12
+        }
     ]
 
     service_ids = {}
 
     for service in services:
 
-        cursor.execute("""
-            INSERT INTO provider_services (
-                provider_id,
-                service_name,
-                service_description,
-                price,
-                price_unit,
-                capacity
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, service)
+        response = (
+            supabase
+            .table("provider_services")
+            .insert(service)
+            .execute()
+        )
 
         service_ids[
-            (service[0], service[1])
-        ] = cursor.lastrowid
+            (
+                service["provider_id"],
+                service["service_name"]
+            )
+        ] = response.data[0]["id"]
 
-    conn.commit()
 
     # ==================================================
     # FOOD MENU ITEMS
@@ -243,39 +242,107 @@ def seed_demo_data():
     ]
 
     menu_items = [
-        (breakfast_id, "Bread", "Main"),
-        (breakfast_id, "Butter", "Side"),
-        (breakfast_id, "Jam", "Side"),
-        (breakfast_id, "Omelette", "Main"),
-        (breakfast_id, "Tea", "Drink"),
-        (breakfast_id, "Coffee", "Drink"),
-        (breakfast_id, "Fresh Fruit", "Fruit"),
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Bread",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Butter",
+            "category": "Side"
+        },
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Jam",
+            "category": "Side"
+        },
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Omelette",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Tea",
+            "category": "Drink"
+        },
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Coffee",
+            "category": "Drink"
+        },
+        {
+            "provider_service_id": breakfast_id,
+            "item_name": "Fresh Fruit",
+            "category": "Fruit"
+        },
 
-        (lunch_id, "Rice", "Main"),
-        (lunch_id, "Vegetable Curry", "Main"),
-        (lunch_id, "Chicken Curry", "Main"),
-        (lunch_id, "Salad", "Side"),
-        (lunch_id, "Dessert", "Dessert"),
+        {
+            "provider_service_id": lunch_id,
+            "item_name": "Rice",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": lunch_id,
+            "item_name": "Vegetable Curry",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": lunch_id,
+            "item_name": "Chicken Curry",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": lunch_id,
+            "item_name": "Salad",
+            "category": "Side"
+        },
+        {
+            "provider_service_id": lunch_id,
+            "item_name": "Dessert",
+            "category": "Dessert"
+        },
 
-        (dinner_id, "Soup", "Starter"),
-        (dinner_id, "Rice", "Main"),
-        (dinner_id, "Bread", "Main"),
-        (dinner_id, "Vegetable Curry", "Main"),
-        (dinner_id, "Chicken Curry", "Main"),
-        (dinner_id, "Dessert", "Dessert")
+        {
+            "provider_service_id": dinner_id,
+            "item_name": "Soup",
+            "category": "Starter"
+        },
+        {
+            "provider_service_id": dinner_id,
+            "item_name": "Rice",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": dinner_id,
+            "item_name": "Bread",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": dinner_id,
+            "item_name": "Vegetable Curry",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": dinner_id,
+            "item_name": "Chicken Curry",
+            "category": "Main"
+        },
+        {
+            "provider_service_id": dinner_id,
+            "item_name": "Dessert",
+            "category": "Dessert"
+        }
     ]
 
-    cursor.executemany("""
-        INSERT INTO service_menu_items (
-            provider_service_id,
-            item_name,
-            category
-        )
-        VALUES (?, ?, ?)
-    """, menu_items)
+    (
+        supabase
+        .table("food_menu_items")
+        .insert(menu_items)
+        .execute()
+    )
 
-    conn.commit()
-    conn.close()
 
     # ==================================================
     # DEMO BOOKINGS
@@ -322,6 +389,7 @@ def seed_demo_data():
 
         "notes": "One guest requires a separate room."
     })
+
 
     # ==================================================
     # BOOKING 1 SERVICES
@@ -394,6 +462,7 @@ def seed_demo_data():
         "Confirmed",
         "Sunrise guided trek"
     )
+
 
     # ==================================================
     # BOOKING 2 SERVICES
